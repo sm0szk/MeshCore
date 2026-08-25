@@ -31,7 +31,7 @@
  *        Headers
  *----------------------------------------------------------------------------*/
 
-#include "WVariant.h"
+#include "../WVariant.h"
 
 #ifdef __cplusplus
 extern "C"

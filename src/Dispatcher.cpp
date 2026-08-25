@@ -190,8 +190,8 @@ bool Dispatcher::tryParsePacket(Packet* pkt, const uint8_t* raw, int len) {
 
 void Dispatcher::checkRecv() {
   Packet* pkt;
-  float score;
-  uint32_t air_time;
+  float score = 0.0f;
+  uint32_t air_time = 0;
   {
     uint8_t raw[MAX_TRANS_UNIT+1];
     int len = _radio->recvRaw(raw, MAX_TRANS_UNIT);
