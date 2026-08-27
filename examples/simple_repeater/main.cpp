@@ -25,6 +25,7 @@
 
 StdRNG fast_rng;
 SimpleMeshTables tables;
+static bool radio_available = false;
 
 MyMesh the_mesh(board, radio_driver, *new ArduinoMillis(), fast_rng, rtc_clock, tables);
 
@@ -36,6 +37,8 @@ static char command[160];
 #ifdef ETHERNET_ENABLED
 static char ethernet_command[160];
 #endif
+
+static const char CLI_PROMPT[] = "MeshCore> ";
 
 #ifdef WIFI_SSID
 static void wifi_cli_start() {
@@ -53,6 +56,7 @@ static void wifi_cli_loop() {
     wifi_cli_client = incoming;
     wifi_cli_command[0] = 0;
     wifi_cli_client.println("MeshCore Repeater CLI");
+    wifi_cli_client.print(CLI_PROMPT);
   }
 
   if (!wifi_cli_client || !wifi_cli_client.connected()) return;
@@ -67,6 +71,7 @@ static void wifi_cli_loop() {
       if (reply[0]) wifi_cli_client.println(reply);
       wifi_cli_command[0] = 0;
       len = 0;
+      wifi_cli_client.print(CLI_PROMPT);
     } else {
       wifi_cli_command[len++] = c;
       wifi_cli_command[len] = 0;
@@ -86,11 +91,14 @@ static unsigned long userBtnDownAt = 0;
 void setup() {
   Serial.begin(115200);
   delay(1000);
+  Serial.println("MeshCore: setup");
 
   board.begin();
+  Serial.println("MeshCore: board ready");
 
 #ifdef WIFI_SSID
   wifi_cli_start();
+  Serial.println("MeshCore: WiFi starting");
 #endif
 
 #ifdef HAS_EXTERNAL_WATCHDOG
@@ -110,14 +118,17 @@ void setup() {
     display.print("Please wait...");
     display.endFrame();
   }
+  Serial.println("MeshCore: display ready");
 #endif
 
-  if (!radio_init()) {
-    MESH_DEBUG_PRINTLN("Radio init failed!");
-    halt();
+  radio_available = radio_init();
+  if (!radio_available) {
+    Serial.println("MeshCore: radio unavailable, continuing without LoRa");
+  } else {
+    Serial.println("MeshCore: radio ready");
   }
 
-  fast_rng.begin(radio_driver.getRngSeed());
+  fast_rng.begin(radio_available ? radio_driver.getRngSeed() : micros());
 
   FILESYSTEM* fs;
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
@@ -138,10 +149,10 @@ void setup() {
 #endif
   if (!store.load("_main", the_mesh.self_id)) {
     MESH_DEBUG_PRINTLN("Generating new keypair");
-    the_mesh.self_id = radio_new_identity();   // create new random identity
+    the_mesh.self_id = radio_available ? radio_new_identity() : mesh::LocalIdentity(&fast_rng);
     int count = 0;
     while (count < 10 && (the_mesh.self_id.pub_key[0] == 0x00 || the_mesh.self_id.pub_key[0] == 0xFF)) {  // reserved id hashes
-      the_mesh.self_id = radio_new_identity(); count++;
+      the_mesh.self_id = radio_available ? radio_new_identity() : mesh::LocalIdentity(&fast_rng); count++;
     }
     store.save("_main", the_mesh.self_id);
   }
@@ -154,9 +165,12 @@ void setup() {
   ethernet_command[0] = 0;
 #endif
 
+  Serial.print(CLI_PROMPT);
+
   sensors.begin();
 
   the_mesh.begin(fs);
+  Serial.println("MeshCore: mesh ready");
 
 #ifdef DISPLAY_CLASS
   ui_task.begin(the_mesh.getNodePrefs(), FIRMWARE_BUILD_DATE, FIRMWARE_VERSION);
@@ -168,31 +182,40 @@ void setup() {
 
   // send out initial zero hop Advertisement to the mesh
 #if ENABLE_ADVERT_ON_BOOT == 1
-  the_mesh.sendSelfAdvertisement(16000, false);
+  if (radio_available) the_mesh.sendSelfAdvertisement(16000, false);
 #endif
 
   board.onBootComplete();
+  Serial.println("MeshCore: ready");
 }
 
 void loop() {
   // Handle Serial CLI
   int len = strlen(command);
+  bool serial_line_complete = false;
   while (Serial.available() && len < sizeof(command)-1) {
     char c = Serial.read();
-    if (c != '\n') {
+    if (c != '\r' && c != '\n') {
       command[len++] = c;
       command[len] = 0;
       Serial.print(c);
     }
-    if (c == '\r') break;
+    if (c == '\r' || c == '\n') {
+      serial_line_complete = true;
+      break;
+    }
   }
   if (len == sizeof(command)-1) {  // command buffer full
     command[sizeof(command)-1] = '\r';
   }
 
-  if (len > 0 && command[len - 1] == '\r') {  // received complete line
+  if (serial_line_complete && Serial.available() && (Serial.peek() == '\r' || Serial.peek() == '\n')) {
+    Serial.read();  // consume the second character of CRLF
+  }
+
+  if (len == sizeof(command)-1 || serial_line_complete) {  // received complete line
     Serial.print('\n');
-    command[len - 1] = 0;  // replace newline with C string null terminator
+    command[len] = 0;
     char reply[160];
     reply[0] = 0;
 #ifdef ETHERNET_ENABLED
@@ -206,7 +229,8 @@ void loop() {
       Serial.print("  -> "); Serial.println(reply);
     }
 
-    command[0] = 0;  // reset command buffer
+      command[0] = 0;  // reset command buffer
+      Serial.print(CLI_PROMPT);  // Show prompt after command
   }
 
 #ifdef ETHERNET_ENABLED
@@ -241,7 +265,7 @@ void loop() {
   }
 #endif
 
-  the_mesh.loop();
+  if (radio_available) the_mesh.loop();
   sensors.loop();
 #ifdef DISPLAY_CLASS
   ui_task.loop();
