@@ -13,6 +13,16 @@
   #include <helpers/nrf52/EthernetCLI.h>
 #endif
 
+#ifdef WIFI_SSID
+  #include <WiFi.h>
+  #ifndef WIFI_CLI_PORT
+    #define WIFI_CLI_PORT 2323
+  #endif
+  static WiFiServer wifi_cli_server(WIFI_CLI_PORT);
+  static WiFiClient wifi_cli_client;
+  static char wifi_cli_command[160];
+#endif
+
 StdRNG fast_rng;
 SimpleMeshTables tables;
 
@@ -25,6 +35,44 @@ void halt() {
 static char command[160];
 #ifdef ETHERNET_ENABLED
 static char ethernet_command[160];
+#endif
+
+#ifdef WIFI_SSID
+static void wifi_cli_start() {
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.begin(WIFI_SSID, WIFI_PWD);
+  wifi_cli_server.begin();
+  MESH_DEBUG_PRINTLN("WiFi CLI listening on TCP port %d", WIFI_CLI_PORT);
+}
+
+static void wifi_cli_loop() {
+  WiFiClient incoming = wifi_cli_server.accept();
+  if (incoming) {
+    wifi_cli_client.stop();
+    wifi_cli_client = incoming;
+    wifi_cli_command[0] = 0;
+    wifi_cli_client.println("MeshCore Repeater CLI");
+  }
+
+  if (!wifi_cli_client || !wifi_cli_client.connected()) return;
+
+  size_t len = strlen(wifi_cli_command);
+  while (wifi_cli_client.available() && len < sizeof(wifi_cli_command) - 1) {
+    char c = wifi_cli_client.read();
+    if (c == '\n' && len == 0) continue;
+    if (c == '\r' || c == '\n') {
+      char reply[160] = {0};
+      the_mesh.handleCommand(0, wifi_cli_command, reply);
+      if (reply[0]) wifi_cli_client.println(reply);
+      wifi_cli_command[0] = 0;
+      len = 0;
+    } else {
+      wifi_cli_command[len++] = c;
+      wifi_cli_command[len] = 0;
+    }
+  }
+}
 #endif
 
 // For power saving
@@ -40,6 +88,10 @@ void setup() {
   delay(1000);
 
   board.begin();
+
+#ifdef WIFI_SSID
+  wifi_cli_start();
+#endif
 
 #ifdef HAS_EXTERNAL_WATCHDOG
   external_watchdog.begin();
@@ -168,6 +220,10 @@ void loop() {
     ethernet_send_reply(reply);
     ethernet_command[0] = 0;
   }
+#endif
+
+#ifdef WIFI_SSID
+  wifi_cli_loop();
 #endif
 
 #if defined(PIN_USER_BTN) && defined(_SEEED_SENSECAP_SOLAR_H_) && !defined(DISPLAY_CLASS)

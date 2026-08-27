@@ -24,6 +24,11 @@
 #define WITH_BRIDGE
 #endif
 
+#ifdef WITH_IP_BRIDGE
+#include "helpers/bridges/IPBridge.h"
+#define WITH_BRIDGE
+#endif
+
 #include <helpers/AdvertDataHelpers.h>
 #include <helpers/ArduinoHelpers.h>
 #include <helpers/ClientACL.h>
@@ -118,6 +123,8 @@ class MyMesh : public mesh::Mesh, public CommonCLICallbacks {
   RS232Bridge bridge;
 #elif defined(WITH_ESPNOW_BRIDGE)
   ESPNowBridge bridge;
+#elif defined(WITH_IP_BRIDGE)
+  IPBridge bridge;
 #endif
 
   void putNeighbour(const mesh::Identity& id, uint32_t timestamp, float snr);
