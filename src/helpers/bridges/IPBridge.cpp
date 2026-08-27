@@ -5,6 +5,10 @@
 IPBridge::IPBridge(NodePrefs *prefs, mesh::PacketManager *mgr, mesh::RTCClock *rtc)
     : BridgeBase(prefs, mgr, rtc), _server(IP_BRIDGE_PORT) {}
 
+void IPBridge::resetRx() {
+  _rx_buffer_pos = 0;
+}
+
 void IPBridge::begin() {
   resetRx();
   _server.begin();
