@@ -11,6 +11,25 @@
 
 #include <SPIFFS.h>
 
+static String jsonEscape(const String& input) {
+  String output;
+  output.reserve(input.length());
+
+  for (size_t i = 0; i < input.length(); ++i) {
+    const char c = input.charAt(i);
+    switch (c) {
+      case '\\': output += "\\\\"; break;
+      case '"': output += "\\\""; break;
+      case '\n': output += "\\n"; break;
+      case '\r': output += "\\r"; break;
+      case '\t': output += "\\t"; break;
+      default: output += c; break;
+    }
+  }
+
+  return output;
+}
+
 bool ESP32Board::startOTAUpdate(const char* id, char reply[]) {
   inhibit_sleep = true;   // prevent sleep during OTA
   WiFi.softAP("MeshCore-OTA", NULL);
@@ -23,11 +42,40 @@ bool ESP32Board::startOTAUpdate(const char* id, char reply[]) {
   static char home_buf[90];
   sprintf(home_buf, "<H2>Hi! I am a MeshCore Repeater. ID: %s</H2>", id);
 
+  static String last_message = "MeshCore ready";
+
   AsyncWebServer* server = new AsyncWebServer(80);
 
   server->on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(200, "text/html", home_buf);
   });
+
+  server->on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String payload = "{";
+    payload += "\"status\":\"ok\",";
+    payload += "\"message\":\"" + jsonEscape(last_message) + "\",";
+    payload += "\"uptime\":" + String(millis() / 1000);
+    payload += "}";
+    request->send(200, "application/json", payload);
+  });
+
+  server->on("/message", HTTP_POST, [](AsyncWebServerRequest *request) {
+    String incoming = request->arg("plain");
+    if (incoming.length() == 0) {
+      request->send(400, "application/json", "{\"error\":\"No message body supplied\"}");
+      return;
+    }
+
+    if (incoming.startsWith("\"") && incoming.endsWith("\"") && incoming.length() > 1) {
+      incoming = incoming.substring(1, incoming.length() - 1);
+    }
+
+    last_message = incoming;
+
+    String payload = "{\"status\":\"ok\",\"message\":\"" + jsonEscape(last_message) + "\"}";
+    request->send(200, "application/json", payload);
+  });
+
   server->on("/log", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(SPIFFS, "/packet_log", "text/plain");
   });
