@@ -31,6 +31,9 @@ bool AutoDiscoverRTCClock::i2c_probe(TwoWire& wire, uint8_t addr) {
 }
 
 void AutoDiscoverRTCClock::begin(TwoWire& wire) {
+#ifdef DISABLE_RTC_AUTODISCOVERY
+  return;
+#else
   #if !defined(DISABLE_DS3231_PROBE)
   if (i2c_probe(wire, DS3231_ADDRESS)) {
     ds3231_success = rtc_3231.begin(&wire);
@@ -56,6 +59,7 @@ void AutoDiscoverRTCClock::begin(TwoWire& wire) {
     rtc_8130_success = true;
     MESH_DEBUG_PRINTLN("RX8130CE: Initialized");
   }
+#endif
 }
 
 uint32_t AutoDiscoverRTCClock::getCurrentTime() {

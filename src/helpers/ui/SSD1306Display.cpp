@@ -29,10 +29,9 @@ bool SSD1306Display::begin() {
   display.setRotation(DISPLAY_ROTATION);
   #endif
   bool initialized = display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS, true, false);
-  bool detected = i2c_probe(Wire, DISPLAY_ADDRESS);
-  Serial.printf("OLED: init=%s address=0x%02X detected=%s\n",
-                initialized ? "ok" : "failed", DISPLAY_ADDRESS, detected ? "yes" : "no");
-  return initialized && detected;
+  Serial.printf("OLED: init=%s address=0x%02X\n",
+                initialized ? "ok" : "failed", DISPLAY_ADDRESS);
+  return initialized;
 }
 
 void SSD1306Display::turnOn() {
