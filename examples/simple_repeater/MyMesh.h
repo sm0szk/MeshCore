@@ -170,7 +170,11 @@ protected:
 
 #if ENV_INCLUDE_GPS == 1
   void applyGpsPrefs() {
+#ifdef PERSISTANT_GPS
+    sensors.setSettingValue("gps", "1");
+#else
     sensors.setSettingValue("gps", _prefs.gps_enabled?"1":"0");
+#endif
   }
 #endif
 
