@@ -15,6 +15,10 @@ static bool rtc_8563_success = false;
 static RTC_RX8130CE rtc_8130;
 static bool rtc_8130_success = false;
 
+static bool isSaneTime(uint32_t time) {
+  return time >= 1577836800UL && time <= 2082758400UL; // 2020-01-01 through 2036-01-01
+}
+
 #define DS3231_ADDRESS   0x68
 #define RV3028_ADDRESS   0x52
 #define PCF8563_ADDRESS  0x51
@@ -55,12 +59,11 @@ void AutoDiscoverRTCClock::begin(TwoWire& wire) {
 }
 
 uint32_t AutoDiscoverRTCClock::getCurrentTime() {
+  uint32_t time = 0;
   if (ds3231_success) {
-    return rtc_3231.now().unixtime();
-  }
-
-  if (rv3028_success) {
-    return DateTime(
+    time = rtc_3231.now().unixtime();
+  } else if (rv3028_success) {
+    time = DateTime(
         rtc_rv3028.getYear(),
         rtc_rv3028.getMonth(),
         rtc_rv3028.getDate(),
@@ -68,18 +71,14 @@ uint32_t AutoDiscoverRTCClock::getCurrentTime() {
         rtc_rv3028.getMinute(),
         rtc_rv3028.getSecond()
     ).unixtime();
-  }
-
-  if (rtc_8563_success) {
-    return rtc_8563.now().unixtime();
-  }
-
-  if (rtc_8130_success) {
+  } else if (rtc_8563_success) {
+    time = rtc_8563.now().unixtime();
+  } else if (rtc_8130_success) {
     MESH_DEBUG_PRINTLN("RX8130CE: Reading time");
-    return rtc_8130.now().unixtime();
+    time = rtc_8130.now().unixtime();
   }
 
-  return _fallback->getCurrentTime();
+  return isSaneTime(time) ? time : _fallback->getCurrentTime();
 }
 
 void AutoDiscoverRTCClock::setCurrentTime(uint32_t time) { 

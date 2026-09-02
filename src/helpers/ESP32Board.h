@@ -202,7 +202,9 @@ public:
   ESP32RTCClock() { }
   void begin() {
     esp_reset_reason_t reason = esp_reset_reason();
-    if (reason == ESP_RST_POWERON) {
+    time_t now;
+    time(&now);
+    if (reason == ESP_RST_POWERON || now < 1577836800 || now > 2082758400) {
       // start with some date/time in the recent past
       struct timeval tv;
       tv.tv_sec = 1715770351;  // 15 May 2024, 8:50pm
