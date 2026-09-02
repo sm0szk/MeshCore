@@ -2,6 +2,9 @@
 #include "target.h"
 #include <Arduino.h>
 #include <helpers/CommonCLI.h>
+#ifdef WIFI_SSID
+#include <WiFi.h>
+#endif
 
 #ifndef USER_BTN_PRESSED
 #define USER_BTN_PRESSED LOW
@@ -106,6 +109,13 @@ void UITask::renderCurrScreen() {
     _display->setCursor(0, 30);
     sprintf(tmp, "BW: %03.2f CR: %d", _node_prefs->bw, _node_prefs->cr);
     _display->print(tmp);
+
+#ifdef WIFI_SSID
+    IPAddress ip = WiFi.localIP();
+    snprintf(tmp, sizeof(tmp), "IP: %u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+    _display->setCursor(0, 40);
+    _display->print(tmp);
+#endif
   }
 }
 
