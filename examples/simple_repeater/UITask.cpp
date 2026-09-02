@@ -10,7 +10,9 @@
 #define USER_BTN_PRESSED LOW
 #endif
 
-#define AUTO_OFF_MILLIS      20000  // 20 seconds
+#ifndef OLED_AUTO_OFF_MILLIS
+#define OLED_AUTO_OFF_MILLIS 20000  // 20 seconds
+#endif
 #define BOOT_SCREEN_MILLIS   4000   // 4 seconds
 
 #define POWEROFF_DELAY 3000
@@ -112,7 +114,11 @@ void UITask::renderCurrScreen() {
 
 #ifdef WIFI_SSID
     IPAddress ip = WiFi.localIP();
-    snprintf(tmp, sizeof(tmp), "IP: %u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+    if (WiFi.status() == WL_CONNECTED) {
+      snprintf(tmp, sizeof(tmp), "IP: %u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+    } else {
+      snprintf(tmp, sizeof(tmp), "WIFI...");
+    }
     _display->setCursor(0, 40);
     _display->print(tmp);
 #endif
@@ -144,7 +150,7 @@ void UITask::loop() {
 
       _next_refresh = millis() + 1000;   // refresh every second
     }
-    if (millis() > _auto_off) {
+    if (OLED_AUTO_OFF_MILLIS > 0 && millis() > _auto_off) {
       _display->turnOff();
     }
   }
