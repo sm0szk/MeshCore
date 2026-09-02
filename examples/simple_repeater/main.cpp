@@ -22,6 +22,14 @@
   static WiFiClient wifi_cli_client;
   static char wifi_cli_command[160];
   static bool wifi_ip_reported = false;
+
+  static void wifi_event_handler(WiFiEvent_t event) {
+    if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
+      Serial.print("WiFi connected, IP: ");
+      Serial.println(WiFi.localIP());
+      wifi_ip_reported = true;
+    }
+  }
 #endif
 
 StdRNG fast_rng;
@@ -45,6 +53,7 @@ static const char CLI_PROMPT[] = "MeshCore> ";
 static void wifi_cli_start() {
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
+  WiFi.onEvent(wifi_event_handler);
   WiFi.begin(WIFI_SSID, WIFI_PWD);
   wifi_cli_server.begin();
   MESH_DEBUG_PRINTLN("WiFi CLI listening on TCP port %d", WIFI_CLI_PORT);
