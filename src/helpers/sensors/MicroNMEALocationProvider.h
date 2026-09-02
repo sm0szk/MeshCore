@@ -125,9 +125,20 @@ public :
     bool isValid() override { return nmea.isValid(); }
 
     long getTimestamp() override { 
-        DateTime dt(nmea.getYear(), nmea.getMonth(),nmea.getDay(),nmea.getHour(),nmea.getMinute(),nmea.getSecond());
+        uint16_t year = nmea.getYear();
+        if (year < 100) year += 2000;
+        DateTime dt(year, nmea.getMonth(), nmea.getDay(), nmea.getHour(), nmea.getMinute(), nmea.getSecond());
         return dt.unixtime();
     } 
+
+    bool hasSaneTimestamp() {
+        uint16_t year = nmea.getYear();
+        if (year < 100) year += 2000;
+        const char* date = __DATE__;
+        uint16_t build_year = (date[7] - '0') * 1000 + (date[8] - '0') * 100 +
+                              (date[9] - '0') * 10 + (date[10] - '0');
+        return year >= 2020 && year <= build_year + 1;
+    }
 
     void sendSentence(const char *sentence) override {
         nmea.sendSentence(*_gps_serial, sentence);
@@ -152,7 +163,7 @@ public :
                 _time_sync_needed = true;
             }
             if (_time_sync_needed && time_valid > 2) {
-                if (_clock != NULL) {
+                if (_clock != NULL && hasSaneTimestamp()) {
                     _clock->setCurrentTime(getTimestamp());
                     _time_sync_needed = false;
                     _last_time_sync = millis();
