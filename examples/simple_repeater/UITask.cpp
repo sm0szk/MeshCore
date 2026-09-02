@@ -36,7 +36,7 @@ static const uint8_t meshcore_logo [] PROGMEM = {
 
 void UITask::begin(NodePrefs* node_prefs, const char* build_date, const char* firmware_version) {
   _prevBtnState = HIGH;
-  _auto_off = millis() + AUTO_OFF_MILLIS;
+  _auto_off = millis() + OLED_AUTO_OFF_MILLIS;
   _started_at = millis();
   _node_prefs = node_prefs;
   _display->turnOn();
@@ -134,7 +134,7 @@ void UITask::loop() {
     } else {
       _display->turnOn();
     }
-    _auto_off = millis() + AUTO_OFF_MILLIS;   // extend auto-off timer
+    _auto_off = millis() + OLED_AUTO_OFF_MILLIS;   // extend auto-off timer
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
       _display->turnOn();
       Serial.println("Powering Off");
