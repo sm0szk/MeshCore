@@ -22,10 +22,17 @@ bool SSD1306Display::begin() {
     if (_peripher_power) _peripher_power->claim();
     _isOn = true;
   }
+  #if defined(PIN_BOARD_SDA) && defined(PIN_BOARD_SCL)
+  Wire.begin(PIN_BOARD_SDA, PIN_BOARD_SCL);
+  #endif
   #ifdef DISPLAY_ROTATION
   display.setRotation(DISPLAY_ROTATION);
   #endif
-  return display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS, true, false) && i2c_probe(Wire, DISPLAY_ADDRESS);
+  bool initialized = display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS, true, false);
+  bool detected = i2c_probe(Wire, DISPLAY_ADDRESS);
+  Serial.printf("OLED: init=%s address=0x%02X detected=%s\n",
+                initialized ? "ok" : "failed", DISPLAY_ADDRESS, detected ? "yes" : "no");
+  return initialized && detected;
 }
 
 void SSD1306Display::turnOn() {
