@@ -21,6 +21,7 @@
   static WiFiServer wifi_cli_server(WIFI_CLI_PORT);
   static WiFiClient wifi_cli_client;
   static char wifi_cli_command[160];
+  static bool wifi_ip_reported = false;
 #endif
 
 StdRNG fast_rng;
@@ -50,6 +51,12 @@ static void wifi_cli_start() {
 }
 
 static void wifi_cli_loop() {
+  if (!wifi_ip_reported && WiFi.status() == WL_CONNECTED) {
+    Serial.print("WiFi connected, IP: ");
+    Serial.println(WiFi.localIP());
+    wifi_ip_reported = true;
+  }
+
   WiFiClient incoming = wifi_cli_server.accept();
   if (incoming) {
     wifi_cli_client.stop();
