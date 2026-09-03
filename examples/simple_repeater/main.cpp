@@ -112,11 +112,6 @@ void setup() {
   board.begin();
   Serial.println("MeshCore: board ready");
 
-#ifdef WIFI_SSID
-  wifi_cli_start();
-  Serial.println("MeshCore: WiFi starting");
-#endif
-
 #ifdef HAS_EXTERNAL_WATCHDOG
   external_watchdog.begin();
 #endif
@@ -136,6 +131,11 @@ void setup() {
     display.endFrame();
   }
   Serial.printf("MeshCore: display %s\n", display_ready ? "ready" : "not found");
+#endif
+
+#ifdef WIFI_SSID
+  wifi_cli_start();
+  Serial.println("MeshCore: WiFi starting");
 #endif
 
   radio_available = radio_init();
