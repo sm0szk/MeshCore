@@ -22,9 +22,6 @@ bool SSD1306Display::begin() {
     if (_peripher_power) _peripher_power->claim();
     _isOn = true;
   }
-  #if defined(PIN_BOARD_SDA) && defined(PIN_BOARD_SCL)
-  Wire.begin(PIN_BOARD_SDA, PIN_BOARD_SCL);
-  #endif
   #ifdef DISPLAY_ROTATION
   display.setRotation(DISPLAY_ROTATION);
   #endif
