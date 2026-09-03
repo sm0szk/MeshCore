@@ -123,14 +123,12 @@ void setup() {
 #endif
 
 #ifdef DISPLAY_CLASS
-  bool display_ready = display.begin();
-  if (display_ready) {
+  if (display.begin()) {
     display.startFrame();
     display.setCursor(0, 0);
     display.print("Please wait...");
     display.endFrame();
   }
-  Serial.printf("MeshCore: display %s\n", display_ready ? "ready" : "not found");
 #endif
 
 #ifdef WIFI_SSID

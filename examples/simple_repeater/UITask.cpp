@@ -10,9 +10,7 @@
 #define USER_BTN_PRESSED LOW
 #endif
 
-#ifndef OLED_AUTO_OFF_MILLIS
-#define OLED_AUTO_OFF_MILLIS 20000  // 20 seconds
-#endif
+#define AUTO_OFF_MILLIS      20000  // 20 seconds
 #define BOOT_SCREEN_MILLIS   4000   // 4 seconds
 
 #define POWEROFF_DELAY 3000
@@ -36,7 +34,7 @@ static const uint8_t meshcore_logo [] PROGMEM = {
 
 void UITask::begin(NodePrefs* node_prefs, const char* build_date, const char* firmware_version) {
   _prevBtnState = HIGH;
-  _auto_off = millis() + OLED_AUTO_OFF_MILLIS;
+  _auto_off = millis() + AUTO_OFF_MILLIS;
   _started_at = millis();
   _node_prefs = node_prefs;
   _display->turnOn();
@@ -134,7 +132,7 @@ void UITask::loop() {
     } else {
       _display->turnOn();
     }
-    _auto_off = millis() + OLED_AUTO_OFF_MILLIS;   // extend auto-off timer
+    _auto_off = millis() + AUTO_OFF_MILLIS;   // extend auto-off timer
   } else if (ev == BUTTON_EVENT_LONG_PRESS) {
       _display->turnOn();
       Serial.println("Powering Off");
@@ -150,7 +148,7 @@ void UITask::loop() {
 
       _next_refresh = millis() + 1000;   // refresh every second
     }
-    if (OLED_AUTO_OFF_MILLIS > 0 && millis() > _auto_off) {
+    if (millis() > _auto_off) {
       _display->turnOff();
     }
   }
