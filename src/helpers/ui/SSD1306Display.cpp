@@ -25,10 +25,7 @@ bool SSD1306Display::begin() {
   #ifdef DISPLAY_ROTATION
   display.setRotation(DISPLAY_ROTATION);
   #endif
-  bool initialized = display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS, true, false);
-  Serial.printf("OLED: init=%s address=0x%02X\n",
-                initialized ? "ok" : "failed", DISPLAY_ADDRESS);
-  return initialized;
+  return display.begin(SSD1306_SWITCHCAPVCC, DISPLAY_ADDRESS, true, false);
 }
 
 void SSD1306Display::turnOn() {
