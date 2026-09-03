@@ -23,6 +23,9 @@
 #ifndef IP_RELAY_SEEN_CACHE_SIZE
 #define IP_RELAY_SEEN_CACHE_SIZE 256
 #endif
+#ifndef BRIDGE_DEBUG
+#define BRIDGE_DEBUG 0
+#endif
 
 #ifndef IP_RELAY_PRIVATE_CHANNEL_1_NAME
 #define IP_RELAY_PRIVATE_CHANNEL_1_NAME ""
@@ -136,6 +139,16 @@ void resetFrame(RelayClient &relayClient) {
   relayClient.framePosition = 0;
 }
 
+void dumpReceivedFrame(const RelayClient &relayClient, int sourceIndex) {
+#if BRIDGE_DEBUG
+  Serial.printf("IP relay RX client %d, %u bytes:", sourceIndex, relayClient.framePosition);
+  for (uint16_t index = 0; index < relayClient.framePosition; index++) {
+    Serial.printf(" %02X", relayClient.frame[index]);
+  }
+  Serial.println();
+#endif
+}
+
 void broadcastFrame(const uint8_t *frame, uint16_t frameLength, int sourceIndex) {
   for (int clientIndex = 0; clientIndex < IP_RELAY_MAX_CLIENTS; clientIndex++) {
     if (clientIndex == sourceIndex || !relayClients[clientIndex].socket.connected()) continue;
@@ -182,6 +195,7 @@ void processByte(RelayClient &relayClient, int sourceIndex, uint8_t byte) {
 
   uint16_t receivedChecksum = ((uint16_t)relayClient.frame[4 + payloadLength] << 8) |
                               relayClient.frame[5 + payloadLength];
+  dumpReceivedFrame(relayClient, sourceIndex);
   if (fletcher16(relayClient.frame + 4, payloadLength) == receivedChecksum) {
     if (rememberPacket(relayClient.frame + 4, payloadLength)) {
       logGroupMessage(relayClient.frame + 4, payloadLength);

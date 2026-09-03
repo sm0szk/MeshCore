@@ -107,6 +107,10 @@ void IPBridge::processByte(uint8_t byte) {
   if (_rx_buffer_pos != len + FRAME_OVERHEAD) return;
 
   uint16_t received = ((uint16_t)_rx_buffer[4 + len] << 8) | _rx_buffer[5 + len];
+  BRIDGE_DEBUG_PRINTLN("IP bridge RX frame, len=%d", _rx_buffer_pos);
+  for (uint16_t index = 0; index < _rx_buffer_pos; index++) {
+    BRIDGE_DEBUG_PRINTLN("IP bridge RX [%03d] 0x%02X", index, _rx_buffer[index]);
+  }
   if (validateChecksum(_rx_buffer + 4, len, received)) {
     mesh::Packet *packet = _mgr->allocNew();
     if (packet && packet->readFrom(_rx_buffer + 4, len)) {
