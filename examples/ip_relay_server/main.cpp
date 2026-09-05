@@ -337,19 +337,6 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   connectWifi();
-
-  unsigned long startedAt = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startedAt < 20000) {
-    delay(250);
-    Serial.print('.');
-  }
-  Serial.println();
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi unavailable, retrying in loop");
-  } else {
-    Serial.print("Relay IP: ");
-    Serial.println(WiFi.localIP());
-  }
   updateStatusLed();
 
   relayServer.begin();
