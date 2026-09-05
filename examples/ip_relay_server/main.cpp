@@ -207,12 +207,14 @@ void handleSerial() {
     char character = Serial.read();
     if (character == '\r' || character == '\n') {
       if (serialCommandLength > 0) {
+        Serial.println();
         serialCommand[serialCommandLength] = 0;
         handleSerialCommand(serialCommand);
         serialCommandLength = 0;
       }
     } else if (serialCommandLength < sizeof(serialCommand) - 1) {
       serialCommand[serialCommandLength++] = character;
+      Serial.write(character);
     }
   }
 }
