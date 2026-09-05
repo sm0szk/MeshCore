@@ -76,7 +76,7 @@ static void wifi_load_settings() {
   wifi_password = wifi_preferences.getString("password", WIFI_PWD);
 #ifdef WITH_IP_BRIDGE
   ip_gateway = wifi_preferences.getString("gateway", IP_BRIDGE_HOST);
-  static_cast<IPBridge *>(bridge)->setHost(ip_gateway.c_str());
+  the_mesh.setIPBridgeHost(ip_gateway.c_str());
 #endif
 }
 
@@ -100,7 +100,7 @@ static bool handle_wifi_command(char *command, char *reply, size_t reply_size) {
       } else {
         ip_gateway = value;
         wifi_preferences.putString("gateway", ip_gateway);
-        static_cast<IPBridge *>(bridge)->setHost(ip_gateway.c_str());
+        the_mesh.setIPBridgeHost(ip_gateway.c_str());
         snprintf(reply, reply_size, "IP gateway saved: %s", ip_gateway.c_str());
       }
     } else {

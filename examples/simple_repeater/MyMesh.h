@@ -192,6 +192,10 @@ protected:
 
 public:
   MyMesh(mesh::MainBoard& board, mesh::Radio& radio, mesh::MillisecondClock& ms, mesh::RNG& rng, mesh::RTCClock& rtc, mesh::MeshTables& tables);
+#ifdef WITH_IP_BRIDGE
+  void setIPBridgeHost(const char *host);
+  const char *getIPBridgeHost() const;
+#endif
 
   void begin(FILESYSTEM* fs);
   void sendNodeDiscoverReq();

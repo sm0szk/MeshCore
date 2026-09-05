@@ -943,6 +943,16 @@ MyMesh::MyMesh(mesh::MainBoard &board, mesh::Radio &radio, mesh::MillisecondCloc
   memset(default_scope.key, 0, sizeof(default_scope.key));
 }
 
+#ifdef WITH_IP_BRIDGE
+void MyMesh::setIPBridgeHost(const char *host) {
+  bridge.setHost(host);
+}
+
+const char *MyMesh::getIPBridgeHost() const {
+  return bridge.host();
+}
+#endif
+
 void MyMesh::begin(FILESYSTEM *fs) {
   mesh::Mesh::begin();
   _fs = fs;
