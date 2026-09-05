@@ -14,6 +14,7 @@
 #endif
 
 #ifdef WIFI_SSID
+  #include <Preferences.h>
   #include <WiFi.h>
   #ifndef WIFI_CLI_PORT
     #define WIFI_CLI_PORT 2323
@@ -22,6 +23,9 @@
   static WiFiClient wifi_cli_client;
   static char wifi_cli_command[160];
   static bool wifi_ip_reported = false;
+  static Preferences wifi_preferences;
+  static String wifi_ssid;
+  static String wifi_password;
 
   static void wifi_event_handler(WiFiEvent_t event) {
     if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
@@ -50,11 +54,71 @@ static char ethernet_command[160];
 static const char CLI_PROMPT[] = "MeshCore> ";
 
 #ifdef WIFI_SSID
+static void wifi_status(char *reply, size_t reply_size) {
+  int length = snprintf(reply, reply_size, "WiFi SSID: %s\nWiFi status: %s", wifi_ssid.c_str(),
+                        WiFi.status() == WL_CONNECTED ? "connected" : "disconnected");
+  if (WiFi.status() == WL_CONNECTED && length > 0 && (size_t)length < reply_size) {
+    snprintf(reply + length, reply_size - length, "\nWiFi IP: %s\nWiFi gateway: %s",
+             WiFi.localIP().toString().c_str(), WiFi.gatewayIP().toString().c_str());
+  }
+}
+
+static void wifi_connect() {
+  WiFi.disconnect();
+  WiFi.begin(wifi_ssid.c_str(), wifi_password.c_str());
+  wifi_ip_reported = false;
+}
+
+static void wifi_load_settings() {
+  wifi_preferences.begin("wifi-config", false);
+  wifi_ssid = wifi_preferences.getString("ssid", WIFI_SSID);
+  wifi_password = wifi_preferences.getString("password", WIFI_PWD);
+}
+
+static bool handle_wifi_command(char *command, char *reply, size_t reply_size) {
+  if (strncmp(command, "wifi", 4) != 0 || (command[4] != 0 && command[4] != ' ')) return false;
+
+  char *argument = command + 4;
+  while (*argument == ' ') argument++;
+  char *value = strchr(argument, ' ');
+  if (value) {
+    *value++ = 0;
+    while (*value == ' ') value++;
+  }
+
+  if (strcmp(argument, "status") == 0) {
+    wifi_status(reply, reply_size);
+  } else if (strcmp(argument, "ssid") == 0 && value && *value) {
+    wifi_ssid = value;
+    wifi_preferences.putString("ssid", wifi_ssid);
+    wifi_connect();
+    snprintf(reply, reply_size, "WiFi SSID saved\nWiFi connecting...");
+  } else if (strcmp(argument, "password") == 0 && value && *value) {
+    wifi_password = value;
+    wifi_preferences.putString("password", wifi_password);
+    wifi_connect();
+    snprintf(reply, reply_size, "WiFi password saved\nWiFi connecting...");
+  } else if (strcmp(argument, "connect") == 0) {
+    wifi_connect();
+    snprintf(reply, reply_size, "WiFi connecting...");
+  } else if (strcmp(argument, "clear") == 0) {
+    wifi_preferences.clear();
+    wifi_ssid = WIFI_SSID;
+    wifi_password = WIFI_PWD;
+    wifi_connect();
+    snprintf(reply, reply_size, "Saved WiFi settings cleared\nWiFi connecting...");
+  } else {
+    snprintf(reply, reply_size, "Commands: wifi status | wifi ssid <name> | wifi password <password> | wifi connect | wifi clear");
+  }
+  return true;
+}
+
 static void wifi_cli_start() {
+  wifi_load_settings();
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   WiFi.onEvent(wifi_event_handler);
-  WiFi.begin(WIFI_SSID, WIFI_PWD);
+  wifi_connect();
   wifi_cli_server.begin();
   MESH_DEBUG_PRINTLN("WiFi CLI listening on TCP port %d", WIFI_CLI_PORT);
 }
@@ -83,7 +147,9 @@ static void wifi_cli_loop() {
     if (c == '\n' && len == 0) continue;
     if (c == '\r' || c == '\n') {
       char reply[160] = {0};
-      the_mesh.handleCommand(0, wifi_cli_command, reply);
+      if (!handle_wifi_command(wifi_cli_command, reply, sizeof(reply))) {
+        the_mesh.handleCommand(0, wifi_cli_command, reply);
+      }
       if (reply[0]) wifi_cli_client.println(reply);
       wifi_cli_command[0] = 0;
       len = 0;
@@ -91,6 +157,7 @@ static void wifi_cli_loop() {
     } else {
       wifi_cli_command[len++] = c;
       wifi_cli_command[len] = 0;
+      wifi_cli_client.write(c);
     }
   }
 }
@@ -234,11 +301,21 @@ void loop() {
     char reply[160];
     reply[0] = 0;
 #ifdef ETHERNET_ENABLED
-    if (!ethernet_handle_command(command, reply)) {
+  bool command_handled = false;
+#ifdef WIFI_SSID
+  command_handled = handle_wifi_command(command, reply, sizeof(reply));
+#endif
+  if (!command_handled && !ethernet_handle_command(command, reply)) {
       the_mesh.handleCommand(0, command, reply);
     }
 #else
-    the_mesh.handleCommand(0, command, reply);  // NOTE: there is no sender_timestamp via serial!
+#ifdef WIFI_SSID
+    if (!handle_wifi_command(command, reply, sizeof(reply))) {
+      the_mesh.handleCommand(0, command, reply);  // NOTE: there is no sender_timestamp via serial!
+    }
+#else
+  the_mesh.handleCommand(0, command, reply);  // NOTE: there is no sender_timestamp via serial!
+#endif
 #endif
     if (reply[0]) {
       Serial.print("  -> "); Serial.println(reply);
