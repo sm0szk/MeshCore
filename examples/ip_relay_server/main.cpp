@@ -15,6 +15,9 @@
 #ifndef IP_RELAY_PORT
 #define IP_RELAY_PORT 5001
 #endif
+#ifndef IP_RELAY_CLI_PORT
+#define IP_RELAY_CLI_PORT 2323
+#endif
 #ifndef IP_RELAY_MAX_CLIENTS
 #define IP_RELAY_MAX_CLIENTS 8
 #endif
@@ -66,12 +69,17 @@ struct RelayClient {
 };
 
 WiFiServer relayServer(IP_RELAY_PORT);
+WiFiServer cliServer(IP_RELAY_CLI_PORT);
+WiFiClient cliClient;
 RelayClient relayClients[IP_RELAY_MAX_CLIENTS];
 Preferences wifiPreferences;
 String wifiSsid;
 String wifiPassword;
 char serialCommand[SERIAL_COMMAND_SIZE] = {};
 size_t serialCommandLength = 0;
+char cliCommand[SERIAL_COMMAND_SIZE] = {};
+size_t cliCommandLength = 0;
+bool cliLastWasCarriageReturn = false;
 unsigned long nextWifiRetryAt = 0;
 uint8_t seenPacketHashes[IP_RELAY_SEEN_CACHE_SIZE][MAX_HASH_SIZE] = {};
 size_t nextSeenPacketHash = 0;
@@ -134,24 +142,24 @@ void updateStatusLed() {
   statusLed.show();
 }
 
-void printWifiStatus() {
-  Serial.print("WiFi SSID: ");
-  Serial.println(wifiSsid);
-  Serial.print("WiFi status: ");
-  Serial.println(WiFi.status() == WL_CONNECTED ? "connected" : "disconnected");
+void printWifiStatus(Stream &output) {
+  output.print("WiFi SSID: ");
+  output.println(wifiSsid);
+  output.print("WiFi status: ");
+  output.println(WiFi.status() == WL_CONNECTED ? "connected" : "disconnected");
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("WiFi IP: ");
-    Serial.println(WiFi.localIP());
-    Serial.print("WiFi gateway: ");
-    Serial.println(WiFi.gatewayIP());
+    output.print("WiFi IP: ");
+    output.println(WiFi.localIP());
+    output.print("WiFi gateway: ");
+    output.println(WiFi.gatewayIP());
   }
 }
 
-void connectWifi() {
+void connectWifi(Stream &output) {
   WiFi.disconnect();
   WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
   nextWifiRetryAt = millis() + WIFI_RETRY_INTERVAL_MS;
-  Serial.println("WiFi connecting...");
+  output.println("WiFi connecting...");
 }
 
 void loadWifiSettings() {
@@ -160,7 +168,7 @@ void loadWifiSettings() {
   wifiPassword = wifiPreferences.getString("password", WIFI_PWD);
 }
 
-void handleSerialCommand(char *command) {
+void handleCommand(char *command, Stream &output) {
   char *argument = strchr(command, ' ');
   if (argument) {
     *argument++ = 0;
@@ -168,40 +176,39 @@ void handleSerialCommand(char *command) {
   }
 
   if (strcmp(command, "wifi") != 0 || !argument || !*argument) {
-    Serial.println("Commands: wifi status | wifi ssid <name> | wifi password <password> | wifi connect | wifi clear");
-    return;
-  }
-
-  char *value = strchr(argument, ' ');
-  if (value) {
-    *value++ = 0;
-    while (*value == ' ') value++;
-  }
-
-  if (strcmp(argument, "status") == 0) {
-    printWifiStatus();
-  } else if (strcmp(argument, "ssid") == 0 && value && *value) {
-    wifiSsid = value;
-    wifiPreferences.putString("ssid", wifiSsid);
-    Serial.println("WiFi SSID saved");
-    connectWifi();
-  } else if (strcmp(argument, "password") == 0 && value && *value) {
-    wifiPassword = value;
-    wifiPreferences.putString("password", wifiPassword);
-    Serial.println("WiFi password saved");
-    connectWifi();
-  } else if (strcmp(argument, "connect") == 0) {
-    connectWifi();
-  } else if (strcmp(argument, "clear") == 0) {
-    wifiPreferences.clear();
-    wifiSsid = WIFI_SSID;
-    wifiPassword = WIFI_PWD;
-    Serial.println("Saved WiFi settings cleared");
-    connectWifi();
+    output.println("Commands: wifi status | wifi ssid <name> | wifi password <password> | wifi connect | wifi clear");
   } else {
-    Serial.println("Invalid WiFi command");
+    char *value = strchr(argument, ' ');
+    if (value) {
+      *value++ = 0;
+      while (*value == ' ') value++;
+    }
+
+    if (strcmp(argument, "status") == 0) {
+      printWifiStatus(output);
+    } else if (strcmp(argument, "ssid") == 0 && value && *value) {
+      wifiSsid = value;
+      wifiPreferences.putString("ssid", wifiSsid);
+      output.println("WiFi SSID saved");
+      connectWifi(output);
+    } else if (strcmp(argument, "password") == 0 && value && *value) {
+      wifiPassword = value;
+      wifiPreferences.putString("password", wifiPassword);
+      output.println("WiFi password saved");
+      connectWifi(output);
+    } else if (strcmp(argument, "connect") == 0) {
+      connectWifi(output);
+    } else if (strcmp(argument, "clear") == 0) {
+      wifiPreferences.clear();
+      wifiSsid = WIFI_SSID;
+      wifiPassword = WIFI_PWD;
+      output.println("Saved WiFi settings cleared");
+      connectWifi(output);
+    } else {
+      output.println("Invalid WiFi command");
+    }
   }
-  Serial.print("> ");
+  output.print("> ");
 }
 
 void handleSerial() {
@@ -211,12 +218,51 @@ void handleSerial() {
       if (serialCommandLength > 0) {
         Serial.println();
         serialCommand[serialCommandLength] = 0;
-        handleSerialCommand(serialCommand);
+        handleCommand(serialCommand, Serial);
         serialCommandLength = 0;
       }
     } else if (serialCommandLength < sizeof(serialCommand) - 1) {
       serialCommand[serialCommandLength++] = character;
       Serial.write(character);
+    }
+  }
+}
+
+void acceptCliClient() {
+  WiFiClient incoming = cliServer.accept();
+  if (!incoming) return;
+
+  cliClient.stop();
+  cliClient = incoming;
+  cliCommandLength = 0;
+  cliLastWasCarriageReturn = false;
+  cliClient.println("MeshCore IP relay CLI");
+  cliClient.println("Commands: wifi status | wifi ssid <name> | wifi password <password> | wifi connect | wifi clear");
+  cliClient.print("> ");
+  Serial.println("Telnet CLI client connected");
+}
+
+void handleCli() {
+  if (!cliClient || !cliClient.connected()) return;
+
+  while (cliClient.available()) {
+    char character = cliClient.read();
+    if (character == '\r' || character == '\n') {
+      if (character == '\n' && cliLastWasCarriageReturn) {
+        cliLastWasCarriageReturn = false;
+        continue;
+      }
+      cliLastWasCarriageReturn = character == '\r';
+      cliClient.println();
+      if (cliCommandLength > 0) {
+        cliCommand[cliCommandLength] = 0;
+        handleCommand(cliCommand, cliClient);
+        cliCommandLength = 0;
+      }
+    } else if (cliCommandLength < sizeof(cliCommand) - 1) {
+      cliLastWasCarriageReturn = false;
+      cliCommand[cliCommandLength++] = character;
+      cliClient.write(character);
     }
   }
 }
@@ -340,22 +386,26 @@ void setup() {
   loadWifiSettings();
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
-  connectWifi();
+  connectWifi(Serial);
   updateStatusLed();
 
   relayServer.begin();
+  cliServer.begin();
   Serial.printf("Relay listening on TCP port %d\r\n", IP_RELAY_PORT);
+  Serial.printf("CLI listening on TCP port %d\r\n", IP_RELAY_CLI_PORT);
   Serial.print("> ");
 }
 
 void loop() {
   handleSerial();
   if (WiFi.status() != WL_CONNECTED) {
-    if ((long)(millis() - nextWifiRetryAt) >= 0) connectWifi();
+    if ((long)(millis() - nextWifiRetryAt) >= 0) connectWifi(Serial);
   } else {
     nextWifiRetryAt = millis() + WIFI_RETRY_INTERVAL_MS;
   }
   updateStatusLed();
+  acceptCliClient();
+  handleCli();
   acceptClients();
   maintainClients();
   delay(1);
