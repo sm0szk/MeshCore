@@ -142,6 +142,8 @@ void printWifiStatus() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("WiFi IP: ");
     Serial.println(WiFi.localIP());
+    Serial.print("WiFi gateway: ");
+    Serial.println(WiFi.gatewayIP());
   }
 }
 
