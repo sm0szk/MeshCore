@@ -24,6 +24,18 @@ Relay IP: 100.64.0.10
 Relay listening on TCP port 5001
 ```
 
+WiFi can also be configured from the serial monitor. Settings are saved in the ESP32-S3 NVS and survive reboot:
+
+```text
+wifi status
+wifi ssid <network-name>
+wifi password <password>
+wifi connect
+wifi clear
+```
+
+The password is never printed by the CLI. `wifi clear` removes the saved values and restores the build-time defaults.
+
 Set `IP_BRIDGE_HOST` in the Heltec local configuration to this relay address. Use the same Heltec firmware on every repeater.
 
 The relay does not provide encryption or authentication. Keep port `5001` inside the VPN and do not expose it directly to the public internet.

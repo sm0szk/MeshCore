@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <Preferences.h>
 #include <WiFi.h>
 #include <MeshCore.h>
 #include <Packet.h>
@@ -55,6 +56,8 @@
 static constexpr uint16_t FRAME_MAGIC = 0xC03E;
 static constexpr uint16_t FRAME_OVERHEAD = 6;
 static constexpr uint16_t MAX_FRAME_SIZE = (MAX_TRANS_UNIT + 1) + FRAME_OVERHEAD;
+static constexpr size_t SERIAL_COMMAND_SIZE = 128;
+static constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
 
 struct RelayClient {
   WiFiClient socket;
@@ -64,6 +67,12 @@ struct RelayClient {
 
 WiFiServer relayServer(IP_RELAY_PORT);
 RelayClient relayClients[IP_RELAY_MAX_CLIENTS];
+Preferences wifiPreferences;
+String wifiSsid;
+String wifiPassword;
+char serialCommand[SERIAL_COMMAND_SIZE] = {};
+size_t serialCommandLength = 0;
+unsigned long nextWifiRetryAt = 0;
 uint8_t seenPacketHashes[IP_RELAY_SEEN_CACHE_SIZE][MAX_HASH_SIZE] = {};
 size_t nextSeenPacketHash = 0;
 Adafruit_NeoPixel statusLed(1, RELAY_STATUS_LED_PIN, NEO_GRB + NEO_KHZ800);
@@ -123,6 +132,89 @@ void updateStatusLed() {
   bool hasDhcpAddress = WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0);
   statusLed.setPixelColor(0, hasDhcpAddress ? statusLed.Color(0, 32, 0) : 0);
   statusLed.show();
+}
+
+void printWifiStatus() {
+  Serial.print("WiFi SSID: ");
+  Serial.println(wifiSsid);
+  Serial.print("WiFi status: ");
+  Serial.println(WiFi.status() == WL_CONNECTED ? "connected" : "disconnected");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("WiFi IP: ");
+    Serial.println(WiFi.localIP());
+  }
+}
+
+void connectWifi() {
+  WiFi.disconnect();
+  WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
+  nextWifiRetryAt = millis() + WIFI_RETRY_INTERVAL_MS;
+  Serial.println("WiFi connecting...");
+}
+
+void loadWifiSettings() {
+  wifiPreferences.begin("ip-relay", false);
+  wifiSsid = wifiPreferences.getString("ssid", WIFI_SSID);
+  wifiPassword = wifiPreferences.getString("password", WIFI_PWD);
+}
+
+void handleSerialCommand(char *command) {
+  char *argument = strchr(command, ' ');
+  if (argument) {
+    *argument++ = 0;
+    while (*argument == ' ') argument++;
+  }
+
+  if (strcmp(command, "wifi") != 0 || !argument || !*argument) {
+    Serial.println("Commands: wifi status | wifi ssid <name> | wifi password <password> | wifi connect | wifi clear");
+    return;
+  }
+
+  char *value = strchr(argument, ' ');
+  if (value) {
+    *value++ = 0;
+    while (*value == ' ') value++;
+  }
+
+  if (strcmp(argument, "status") == 0) {
+    printWifiStatus();
+  } else if (strcmp(argument, "ssid") == 0 && value && *value) {
+    wifiSsid = value;
+    wifiPreferences.putString("ssid", wifiSsid);
+    Serial.println("WiFi SSID saved");
+    connectWifi();
+  } else if (strcmp(argument, "password") == 0 && value && *value) {
+    wifiPassword = value;
+    wifiPreferences.putString("password", wifiPassword);
+    Serial.println("WiFi password saved");
+    connectWifi();
+  } else if (strcmp(argument, "connect") == 0) {
+    connectWifi();
+  } else if (strcmp(argument, "clear") == 0) {
+    wifiPreferences.clear();
+    wifiSsid = WIFI_SSID;
+    wifiPassword = WIFI_PWD;
+    Serial.println("Saved WiFi settings cleared");
+    connectWifi();
+  } else {
+    Serial.println("Invalid WiFi command");
+  }
+  Serial.print("> ");
+}
+
+void handleSerial() {
+  while (Serial.available()) {
+    char character = Serial.read();
+    if (character == '\r' || character == '\n') {
+      if (serialCommandLength > 0) {
+        serialCommand[serialCommandLength] = 0;
+        handleSerialCommand(serialCommand);
+        serialCommandLength = 0;
+      }
+    } else if (serialCommandLength < sizeof(serialCommand) - 1) {
+      serialCommand[serialCommandLength++] = character;
+    }
+  }
 }
 
 uint16_t fletcher16(const uint8_t *data, size_t length) {
@@ -241,9 +333,10 @@ void setup() {
   delay(500);
   Serial.println("MeshCore IP relay setup");
   initLogChannels();
+  loadWifiSettings();
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
-  WiFi.begin(WIFI_SSID, WIFI_PWD);
+  connectWifi();
 
   unsigned long startedAt = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startedAt < 20000) {
@@ -261,11 +354,15 @@ void setup() {
 
   relayServer.begin();
   Serial.printf("Relay listening on TCP port %d\r\n", IP_RELAY_PORT);
+  Serial.print("> ");
 }
 
 void loop() {
+  handleSerial();
   if (WiFi.status() != WL_CONNECTED) {
-    WiFi.reconnect();
+    if ((long)(millis() - nextWifiRetryAt) >= 0) connectWifi();
+  } else {
+    nextWifiRetryAt = millis() + WIFI_RETRY_INTERVAL_MS;
   }
   updateStatusLed();
   acceptClients();
