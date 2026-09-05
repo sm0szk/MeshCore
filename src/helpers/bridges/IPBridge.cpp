@@ -3,7 +3,17 @@
 #ifdef WITH_IP_BRIDGE
 
 IPBridge::IPBridge(NodePrefs *prefs, mesh::PacketManager *mgr, mesh::RTCClock *rtc)
-    : BridgeBase(prefs, mgr, rtc), _server(IP_BRIDGE_PORT) {}
+    : BridgeBase(prefs, mgr, rtc), _server(IP_BRIDGE_PORT), _host(IP_BRIDGE_HOST) {}
+
+void IPBridge::setHost(const char *host) {
+  _client.stop();
+  _host = host;
+  _next_connect_attempt = 0;
+}
+
+const char *IPBridge::host() const {
+  return _host.c_str();
+}
 
 void IPBridge::resetRx() {
   _rx_buffer_pos = 0;
@@ -13,7 +23,7 @@ void IPBridge::begin() {
   resetRx();
   _server.begin();
   _next_connect_attempt = 0;
-  BRIDGE_DEBUG_PRINTLN("IP bridge listening and connecting to %s:%d", IP_BRIDGE_HOST, IP_BRIDGE_PORT);
+  BRIDGE_DEBUG_PRINTLN("IP bridge listening and connecting to %s:%d", _host.c_str(), IP_BRIDGE_PORT);
   _initialized = true;
 }
 
@@ -47,7 +57,7 @@ void IPBridge::connectClient() {
   if (_client.connected() || WiFi.status() != WL_CONNECTED || (long)(millis() - _next_connect_attempt) < 0) return;
 
   _next_connect_attempt = millis() + IP_BRIDGE_CONNECT_INTERVAL_MS;
-  if (_client.connect(IP_BRIDGE_HOST, IP_BRIDGE_PORT)) {
+  if (_client.connect(_host.c_str(), IP_BRIDGE_PORT)) {
     resetRx();
     BRIDGE_DEBUG_PRINTLN("IP bridge connected to %s:%d", IP_BRIDGE_HOST, IP_BRIDGE_PORT);
   } else {

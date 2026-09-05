@@ -26,6 +26,7 @@
   static Preferences wifi_preferences;
   static String wifi_ssid;
   static String wifi_password;
+    static String ip_gateway;
 
   static void wifi_event_handler(WiFiEvent_t event) {
     if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
@@ -73,9 +74,41 @@ static void wifi_load_settings() {
   wifi_preferences.begin("wifi-config", false);
   wifi_ssid = wifi_preferences.getString("ssid", WIFI_SSID);
   wifi_password = wifi_preferences.getString("password", WIFI_PWD);
+#ifdef WITH_IP_BRIDGE
+  ip_gateway = wifi_preferences.getString("gateway", IP_BRIDGE_HOST);
+  bridge->setHost(ip_gateway.c_str());
+#endif
 }
 
 static bool handle_wifi_command(char *command, char *reply, size_t reply_size) {
+#ifdef WITH_IP_BRIDGE
+  if (strncmp(command, "ip", 2) == 0 && (command[2] == 0 || command[2] == ' ')) {
+    char *argument = command + 2;
+    while (*argument == ' ') argument++;
+    char *value = strchr(argument, ' ');
+    if (value) {
+      *value++ = 0;
+      while (*value == ' ') value++;
+    }
+
+    if (strcmp(argument, "status") == 0) {
+      snprintf(reply, reply_size, "IP gateway: %s", ip_gateway.c_str());
+    } else if (strcmp(argument, "gateway") == 0 && value && *value) {
+      IPAddress parsedAddress;
+      if (!parsedAddress.fromString(value)) {
+        snprintf(reply, reply_size, "Invalid IP gateway address");
+      } else {
+        ip_gateway = value;
+        wifi_preferences.putString("gateway", ip_gateway);
+        bridge->setHost(ip_gateway.c_str());
+        snprintf(reply, reply_size, "IP gateway saved: %s", ip_gateway.c_str());
+      }
+    } else {
+      snprintf(reply, reply_size, "Commands: ip status | ip gateway <address>");
+    }
+    return true;
+  }
+#endif
   if (strncmp(command, "wifi", 4) != 0 || (command[4] != 0 && command[4] != ' ')) return false;
 
   char *argument = command + 4;

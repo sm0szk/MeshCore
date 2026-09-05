@@ -27,6 +27,8 @@ public:
   void loop() override;
   void sendPacket(mesh::Packet *packet) override;
   void onPacketReceived(mesh::Packet *packet) override;
+  void setHost(const char *host);
+  const char *host() const;
 
 private:
   static constexpr uint16_t FRAME_OVERHEAD = BRIDGE_MAGIC_SIZE + BRIDGE_LENGTH_SIZE + BRIDGE_CHECKSUM_SIZE;
@@ -34,6 +36,7 @@ private:
 
   WiFiServer _server;
   WiFiClient _client;
+  String _host;
   uint8_t _rx_buffer[MAX_FRAME_SIZE];
   uint16_t _rx_buffer_pos = 0;
   unsigned long _next_connect_attempt = 0;
